@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đọc truyện cùng YattaD</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --accent-color: #f1c40f;
+            --text-main: #efefef;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+      header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    background: rgba(15, 15, 15, 0.9);
+    backdrop-filter: blur(12px);
+    padding: 12px 20px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #222;
+}
+
+.header-menu-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 25px;
+}
+
+.header-left-group {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+   font-weight: 700;
+    letter-spacing: 1px;
+    font-size: 20px;
+    color: var(--accent-color);
+    white-space: nowrap;
+}
+
+        button {
+            padding: 12px 16px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #1a1a1a;
+            color: #ccc;
+            transition: all 0.3s;
+        }
+
+        button.active {
+            background: var(--accent-color);
+            color: #000;
+            font-weight: bold;
+            border-color: var(--accent-color);
+        }
+
+        #viewer {
+            margin-top: 70px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 90vh;
+        }
+
+        /* Chế độ hiển thị */
+        .mode-scroll img { width: 100%; max-width: 800px; margin-bottom: 8px; }
+        .mode-single { height: calc(100vh - 120px); justify-content: center; flex-direction: row !important; }
+        .mode-double { height: calc(100vh - 120px); justify-content: center; flex-direction: row !important; gap: 20px; }
+        
+        img { height: auto; max-width: 100%; object-fit: contain; }
+        .mode-single img, .mode-double img { height: 100%; }
+        .mode-double img { max-width: 48%; }
+
+        /* Điều hướng */
+        /* Điều hướng */
+.click-area {
+    position: fixed;
+    top: 70px;
+    bottom: 0;
+    width: 40%;
+    z-index: 900;
+    display: none;
+    align-items: center;
+    opacity: 0;
+    transition: 0.3s;
+    cursor: pointer;
+}
+
+.left-area {
+    left: 0;
+    justify-content: flex-start;
+    padding-left: 200px; 
+}
+
+.right-area {
+    right: 0;
+    justify-content: flex-end;
+    padding-right: 200px;
+}
+
+.click-area:hover {
+    opacity: 1;
+    background: rgba(255,255,255,0.02);
+}
+
+.arrow {
+    font-size: 150px;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none; /* tránh icon chặn click */
+}
+
+/* Bảo vệ vùng điều hướng khỏi quét / copy / drag */
+.click-area,
+.click-area * {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+}
+
+.arrow {
+    pointer-events: none;
+}
+
+/* Lớp chặn kéo ảnh ở chế độ cuộn dọc */
+#scroll-blocker {
+    position: fixed;
+    top: 70px; /* dưới header */
+    left: 0;
+    width: 100%;
+    height: calc(100vh - 70px);
+    z-index: 800;
+    display: none;
+
+    background: transparent;
+
+    pointer-events: auto; /* cần để chặn drag */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+}
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-left-group">
+        <div class="header-left">TRÌNH ĐỌC TRUYỆN TRANH</div>
+        <div class="header-right">bởi YattaD</div>
+    </div>
+
+    <div class="header-menu header-menu-center">
+        <button id="btn-scroll" onclick="setMode('scroll')">Cuộn Dọc</button>
+        <button id="btn-single" onclick="setMode('single')">Trang Đơn</button>
+        <button id="btn-double" onclick="setMode('double')">Trang Đôi</button>
+    </div>
+</header>
+
+ <div id="scroll-blocker"></div>
+<div class="click-area left-area" id="left-zone" onclick="navPrev()"><div class="arrow">‹</div></div>
+<div class="click-area right-area" id="right-zone" onclick="navNext()"><div class="arrow">›</div></div>
+
+<div id="viewer" class="mode-scroll"></div>
+<div class="nav-info" id="nav-info"></div>
+
+<script>
+    const totalPages = 30;
+    let currentPage = 0;
+    let currentMode = 'scroll';
+
+    // Trang đặc biệt dạng ghép (spread)
+    const specialPages = { 20: "20-21", 21: "20-21" };
+
+    function formatNum(n) { return n.toString().padStart(2, '0'); }
+
+    function getImgSrc(n) {
+        if (specialPages[n]) return `${specialPages[n]}.jpg`;
+        return `${formatNum(n)}.jpg`;
+    }
+
+    function render() {
+        const viewer = document.getElementById('viewer');
+        const info = document.getElementById('nav-info');
+        const lZone = document.getElementById('left-zone');
+        const rZone = document.getElementById('right-zone');
+        const blocker = document.getElementById('scroll-blocker');
+        
+        document.querySelectorAll('header button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`btn-${currentMode}`).classList.add('active');
+        viewer.innerHTML = '';
+
+        if (currentMode === 'scroll') {
+            info.style.display = 'none'; lZone.style.display = 'none'; rZone.style.display = 'none';
+            viewer.className = 'mode-scroll';
+            for (let i = 0; i <= totalPages; i++) {
+                if (i === 21) continue; // Bỏ qua trang 21 vì đã gộp vào 20-21
+                const img = document.createElement('img');
+                img.src = getImgSrc(i);
+                viewer.appendChild(img);
+                blocker.style.display = 'block';
+            }
+        } else if (currentMode === 'single') {
+            info.style.display = 'block'; lZone.style.display = 'flex'; rZone.style.display = 'flex';
+            viewer.className = 'mode-single';
+            const img = document.createElement('img');
+            img.src = getImgSrc(currentPage);
+            viewer.appendChild(img);
+            info.innerText = `Trang ${specialPages[currentPage] || formatNum(currentPage)} / ${totalPages}`;
+         blocker.style.display = 'none';
+        } else {
+            info.style.display = 'block'; lZone.style.display = 'flex'; rZone.style.display = 'flex';
+            viewer.className = 'mode-double';
+            let start = currentPage % 2 === 0 ? currentPage : currentPage - 1;
+         blocker.style.display = 'none';
+            
+            // Nếu là trang đặc biệt 20-21, chỉ hiện 1 tấm ảnh to thay vì 2 khung ảnh
+            if (specialPages[start] === "20-21") {
+                const img = document.createElement('img');
+                img.src = "20-21.jpg";
+                img.style.maxWidth = "95%"; // Phóng to vì bản thân nó đã là 2 trang
+                viewer.appendChild(img);
+                info.innerText = `Trang 20-21 / ${totalPages}`;
+             blocker.style.display = 'none';
+            } else {
+                const imgL = document.createElement('img');
+                imgL.src = getImgSrc(start);
+                viewer.appendChild(imgL);
+                if (start + 1 <= totalPages) {
+                    const imgR = document.createElement('img');
+                    imgR.src = getImgSrc(start + 1);
+                    viewer.appendChild(imgR);
+               blocker.style.display = 'none';
+                }
+                info.innerText = `Trang ${formatNum(start)}-${formatNum(start+1)} / ${totalPages}`;
+            }
+        }
+    }
+
+    function setMode(mode) { currentMode = mode; render(); window.scrollTo(0,0); }
+
+    function navNext() {
+        let step = (currentMode === 'double') ? 2 : 1;
+        // Nếu đang ở 20 và tiến tới, phải nhảy qua trang 21
+        if (currentPage === 20 || currentPage === 19 && currentMode === 'double') {
+            currentPage = 22;
+        } else if (currentPage + step <= totalPages) {
+            currentPage += step;
+        }
+        if (currentMode === 'double' && currentPage % 2 !== 0) currentPage--;
+        render();
+    }
+
+    function navPrev() {
+        let step = (currentMode === 'double') ? 2 : 1;
+        if (currentPage === 22) {
+            currentPage = 20;
+        } else if (currentPage - step >= 0) {
+            currentPage -= step;
+        }
+        if (currentMode === 'double' && currentPage % 2 !== 0) currentPage--;
+        render();
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (currentMode !== 'scroll') {
+            if (e.key === "ArrowRight") navNext();
+            if (e.key === "ArrowLeft") navPrev();
+        }
+    });
+
+    render();
+
+    ['left-zone', 'right-zone'].forEach(id => {
+        const zone = document.getElementById(id);
+
+        // Chặn chuột phải
+        zone.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Chặn drag
+        zone.addEventListener('dragstart', e => e.preventDefault());
+
+        // Chặn select bằng chuột
+        zone.addEventListener('mousedown', e => {
+            if (e.detail > 1) e.preventDefault();
+        });
+    });
+
+const blocker = document.getElementById('scroll-blocker');
+
+['dragstart', 'contextmenu', 'mousedown', 'selectstart'].forEach(evt => {
+    blocker.addEventListener(evt, e => e.preventDefault());
+});
+
+
+</script>
+</body>
+</html>
